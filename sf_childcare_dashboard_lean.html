@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SF Child Care Dashboard</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #333; }
+        
+        /* Header */
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header-content { max-width: 1600px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; }
+        .header h1 { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .header p { font-size: 13px; opacity: 0.9; }
+        .header-stats { display: flex; gap: 12px; flex-wrap: wrap; }
+        .stat-pill { background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 8px 16px; border-radius: 20px; text-align: center; min-width: 100px; }
+        .stat-value { font-size: 18px; font-weight: 700; }
+        .stat-label { font-size: 11px; opacity: 0.9; text-transform: uppercase; }
+        .help-icon { background: rgba(255,255,255,0.2); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-weight: bold; }
+        
+        /* Layout */
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        .grid { display: grid; grid-template-columns: 280px 1fr 320px; gap: 20px; margin-bottom: 20px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        
+        /* Sidebar */
+        .sidebar { position: sticky; top: 20px; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #e0e0e0; }
+        .sidebar h2 { font-size: 16px; margin-bottom: 12px; }
+        .search-box { width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 14px; }
+        .search-box:focus { outline: none; border-color: #667eea; }
+        
+        /* Filters */
+        .filter-section { border-bottom: 1px solid #f0f0f0; }
+        .filter-header { padding: 16px 20px; cursor: pointer; display: flex; justify-content: space-between; }
+        .filter-header:hover { background: #f9f9f9; }
+        .filter-title { font-size: 13px; font-weight: 600; text-transform: uppercase; color: #555; }
+        .filter-arrow { font-size: 12px; transition: transform 0.3s; color: #999; }
+        .filter-arrow.open { transform: rotate(180deg); }
+        .filter-content { max-height: 0; overflow: hidden; transition: max-height 0.3s; }
+        .filter-content.open { max-height: 400px; overflow-y: auto; }
+        .filter-body { padding: 0 20px 16px; }
+        .filter-option { display: flex; align-items: center; padding: 8px 0; cursor: pointer; }
+        .filter-option input { margin-right: 10px; cursor: pointer; }
+        .filter-option label { font-size: 13px; cursor: pointer; flex: 1; }
+        .filter-count { font-size: 11px; color: #999; background: #f0f0f0; padding: 2px 8px; border-radius: 10px; }
+        .capacity-inputs { display: flex; gap: 10px; }
+        .capacity-input { flex: 1; }
+        .capacity-input label { display: block; font-size: 11px; color: #666; margin-bottom: 4px; }
+        .capacity-input input { width: 100%; padding: 8px; border: 1px solid #e0e0e0; border-radius: 6px; }
+        
+        /* Map */
+        .map-header { padding: 20px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+        .map-title { font-size: 18px; font-weight: 600; }
+        .map-controls { display: flex; gap: 8px; }
+        .btn { padding: 8px 14px; background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 12px; cursor: pointer; }
+        .btn:hover { background: #e8e8e8; }
+        .btn.active { background: #667eea; color: white; border-color: #667eea; }
+        #map { height: 600px; width: 100%; }
+        .map-note { padding: 12px 20px; background: #fff3cd; border-top: 1px solid #ffc107; font-size: 12px; color: #856404; }
+        
+        /* Stats */
+        .stats-card { padding: 20px; margin-bottom: 20px; }
+        .stats-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; color: #555; text-transform: uppercase; }
+        .stat-item { margin-bottom: 16px; }
+        .stat-item-label { font-size: 12px; color: #666; margin-bottom: 6px; }
+        .stat-row { display: flex; align-items: center; gap: 10px; }
+        .stat-num { font-size: 20px; font-weight: 700; min-width: 80px; }
+        .progress-bar { flex: 1; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, #667eea, #764ba2); transition: width 0.3s; }
+        .chart-container { height: 200px; }
+        
+        /* Facilities */
+        .facilities-header { display: flex; justify-content: space-between; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 2px solid #f0f0f0; }
+        .facilities-header h2 { font-size: 18px; }
+        .facility-card { border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+        .facility-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); border-color: #667eea; }
+        .facility-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .facility-name { font-size: 15px; font-weight: 600; flex: 1; }
+        .badges { display: flex; gap: 6px; }
+        .badge { font-size: 10px; padding: 4px 8px; border-radius: 12px; font-weight: 600; text-transform: uppercase; }
+        .badge-licensed { background: #d4edda; color: #155724; }
+        .badge-closed { background: #f8d7da; color: #721c24; }
+        .badge-elfa { background: #e7d4f5; color: #5a1c7d; }
+        .badge-sfusd { background: #d1c4e9; color: #4a148c; }
+        .facility-details { font-size: 13px; color: #666; line-height: 1.6; }
+        .facility-capacity { display: inline-block; margin-top: 8px; padding: 4px 10px; background: #f0f0f0; border-radius: 6px; font-size: 12px; font-weight: 600; }
+        
+        /* Pagination */
+        .pagination { display: flex; justify-content: center; gap: 8px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0; }
+        .page-btn { padding: 8px 14px; background: white; border: 1px solid #e0e0e0; border-radius: 6px; cursor: pointer; }
+        .page-btn:hover { background: #f5f5f5; }
+        .page-btn.active { background: #667eea; color: white; border-color: #667eea; }
+        .page-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+        .modal { background: white; border-radius: 12px; padding: 30px; max-width: 600px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .modal-header h2 { font-size: 20px; }
+        .modal-close { cursor: pointer; font-size: 24px; color: #999; background: none; border: none; }
+        .modal-section { margin-bottom: 24px; }
+        .modal-section h3 { font-size: 16px; margin-bottom: 12px; color: #667eea; }
+        .modal-section p { font-size: 14px; line-height: 1.6; color: #666; }
+        .modal-section ul { margin-left: 20px; }
+        .modal-section li { font-size: 14px; line-height: 1.8; }
+        .modal-section a { color: #667eea; text-decoration: none; }
+        
+        /* Loading */
+        .loading { display: flex; justify-content: center; align-items: center; height: 100vh; flex-direction: column; gap: 20px; }
+        .spinner { width: 60px; height: 60px; border: 6px solid #f3f3f3; border-top: 6px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Responsive */
+        @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } .sidebar { position: static; } }
+        @media (max-width: 768px) { .header-content { flex-direction: column; align-items: flex-start; } #map { height: 400px; } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    
+    <script>
+        // Load data from external JSON
+        window.CHILDCARE_DATA = null;
+        fetch('./childcare_data.json')
+            .then(r => r.json())
+            .then(d => {
+                window.CHILDCARE_DATA = d;
+                console.log('Loaded', d.length, 'facilities');
+                if (window.onDataLoad) window.onDataLoad();
+            })
+            .catch(e => alert('Error loading data. Run a local server (see instructions) or use standalone version.'));
+    </script>
+    
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+        
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [search, setSearch] = useState('');
+            const [open, setOpen] = useState('type');
+            const [typeF, setTypeF] = useState([]);
+            const [statusF, setStatusF] = useState([]);
+            const [elfaF, setElfaF] = useState([]);
+            const [minCap, setMinCap] = useState('');
+            const [maxCap, setMaxCap] = useState('');
+            const [sfusdOnly, setSfusdOnly] = useState(false);
+            const [heatmap, setHeatmap] = useState(true);
+            const [markers, setMarkers] = useState(true);
+            const [modal, setModal] = useState(false);
+            const [page, setPage] = useState(1);
+            const perPage = 25;
+            
+            const mapRef = useRef(null);
+            const mapInst = useRef(null);
+            const heatLayer = useRef(null);
+            const markerLayer = useRef(null);
+            const chartRef = useRef(null);
+            const chartInst = useRef(null);
+            
+            useEffect(() => {
+                if (window.CHILDCARE_DATA) {
+                    setData(window.CHILDCARE_DATA);
+                } else {
+                    window.onDataLoad = () => setData(window.CHILDCARE_DATA);
+                }
+            }, []);
+            
+            const types = useMemo(() => [...new Set(data.map(f => f['Facility Type']))].sort(), [data]);
+            const statuses = useMemo(() => [...new Set(data.map(f => f['Facility Status']))].sort(), [data]);
+            
+            const filtered = useMemo(() => {
+                let f = [...data];
+                if (search) {
+                    const s = search.toLowerCase();
+                    f = f.filter(x => x['Facility Name']?.toLowerCase().includes(s) || 
+                                      x['Facility Address']?.toLowerCase().includes(s) ||
+                                      x['SFUSD_School_Name']?.toLowerCase().includes(s));
+                }
+                if (typeF.length) f = f.filter(x => typeF.includes(x['Facility Type']));
+                if (statusF.length) f = f.filter(x => statusF.includes(x['Facility Status']));
+                if (elfaF.length) f = f.filter(x => elfaF.includes(x['ELFA_Contracted']));
+                if (minCap) f = f.filter(x => (x['Facility Capacity'] || 0) >= parseInt(minCap));
+                if (maxCap) f = f.filter(x => (x['Facility Capacity'] || 0) <= parseInt(maxCap));
+                if (sfusdOnly) f = f.filter(x => x['SFUSD_Site'] === 'Yes');
+                return f;
+            }, [data, search, typeF, statusF, elfaF, minCap, maxCap, sfusdOnly]);
+            
+            const stats = useMemo(() => {
+                const cap = filtered.reduce((s, f) => s + (f['Facility Capacity'] || 0), 0);
+                const lic = filtered.filter(f => f['Facility Status'] === 'LICENSED').length;
+                const sfu = filtered.filter(f => f['SFUSD_Site'] === 'Yes').length;
+                return {
+                    total: filtered.length,
+                    cap: cap,
+                    lic: lic,
+                    licPct: filtered.length > 0 ? Math.round((lic / filtered.length) * 100) : 0,
+                    sfu: sfu
+                };
+            }, [filtered]);
+            
+            const totalPages = Math.ceil(filtered.length / perPage);
+            const paged = useMemo(() => {
+                const start = (page - 1) * perPage;
+                return filtered.slice(start, start + perPage);
+            }, [filtered, page]);
+            
+            useEffect(() => { setPage(1); }, [filtered.length]);
+            
+            useEffect(() => {
+                if (!mapRef.current || mapInst.current) return;
+                const m = L.map(mapRef.current).setView([37.7749, -122.4194], 12);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(m);
+                mapInst.current = m;
+                heatLayer.current = L.layerGroup().addTo(m);
+                markerLayer.current = L.layerGroup().addTo(m);
+            }, []);
+            
+            useEffect(() => {
+                if (!mapInst.current) return;
+                heatLayer.current.clearLayers();
+                markerLayer.current.clearLayers();
+                
+                const valid = filtered.filter(f => f.latitude && f.longitude);
+                
+                if (heatmap && valid.length) {
+                    const heat = valid.map(f => [f.latitude, f.longitude, (f['Facility Capacity'] || 10) / 100]);
+                    L.heatLayer(heat, {radius: 25, blur: 15, maxZoom: 17}).addTo(heatLayer.current);
+                }
+                
+                if (markers) {
+                    valid.forEach(f => {
+                        const color = f['Facility Status'] === 'LICENSED' ? '#4CAF50' :
+                                     f['Facility Status'] === 'CLOSED' ? '#f44336' :
+                                     f['Facility Status'] === 'INACTIVE' ? '#ff9800' : '#2196F3';
+                        const m = L.circleMarker([f.latitude, f.longitude], {
+                            radius: Math.sqrt(f['Facility Capacity'] || 10) * 1.5,
+                            fillColor: color,
+                            color: 'white',
+                            weight: 2,
+                            opacity: 1,
+                            fillOpacity: 0.7
+                        });
+                        m.bindPopup(`<strong>${f['Facility Name']}</strong><br>${f['Facility Address']}<br>Capacity: ${f['Facility Capacity']}<br>Status: ${f['Facility Status']}${f['SFUSD_Site'] === 'Yes' ? '<br><strong style="color:#673AB7">SFUSD: ' + f['SFUSD_School_Name'] + '</strong>' : ''}`);
+                        m.addTo(markerLayer.current);
+                    });
+                }
+            }, [filtered, heatmap, markers]);
+            
+            useEffect(() => {
+                if (!chartRef.current) return;
+                if (chartInst.current) chartInst.current.destroy();
+                
+                const ranges = ['0-20', '21-50', '51-100', '101-200', '200+'];
+                const counts = ranges.map((r, i) => {
+                    const [min, max] = r.split('-').map(n => n === '200+' ? Infinity : parseInt(n));
+                    return filtered.filter(f => {
+                        const c = f['Facility Capacity'] || 0;
+                        return max === Infinity ? c > min : c >= min && c <= max;
+                    }).length;
+                });
+                
+                chartInst.current = new Chart(chartRef.current, {
+                    type: 'bar',
+                    data: {
+                        labels: ranges,
+                        datasets: [{label: 'Facilities', data: counts, backgroundColor: 'rgba(102,126,234,0.8)'}]
+                    },
+                    options: {responsive: true, maintainAspectRatio: false, plugins: {legend: {display: false}}, scales: {y: {beginAtZero: true}}}
+                });
+            }, [filtered]);
+            
+            const toggle = (arr, set, val) => {
+                set(arr.includes(val) ? arr.filter(v => v !== val) : [...arr, val]);
+            };
+            
+            if (!data.length) return <div className="loading"><div className="spinner"></div><div>Loading data...</div></div>;
+            
+            return <div>
+                <div className="header">
+                    <div className="header-content">
+                        <div>
+                            <h1>SF Child Care Dashboard</h1>
+                            <p>Licensed Centers & Large FCCs - Small FCC data not available</p>
+                        </div>
+                        <div className="header-stats">
+                            <div className="stat-pill"><div className="stat-value">{stats.total.toLocaleString()}</div><div className="stat-label">Facilities</div></div>
+                            <div className="stat-pill"><div className="stat-value">{stats.cap.toLocaleString()}</div><div className="stat-label">Capacity</div></div>
+                            <div className="stat-pill"><div className="stat-value">{stats.licPct}%</div><div className="stat-label">Licensed</div></div>
+                            <div className="stat-pill"><div className="stat-value">{stats.sfu}</div><div className="stat-label">SFUSD</div></div>
+                            <div className="help-icon" onClick={() => setModal(true)}>?</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div className="container">
+                    <div className="grid">
+                        <div className="card sidebar">
+                            <div className="sidebar-header">
+                                <h2>Filters</h2>
+                                <input className="search-box" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+                            </div>
+                            
+                            {[
+                                {id: 'type', title: 'Facility Type', items: types, filter: typeF, setFilter: setTypeF},
+                                {id: 'status', title: 'License Status', items: statuses, filter: statusF, setFilter: setStatusF},
+                                {id: 'elfa', title: 'ELFA Contracted', items: ['Yes', 'No'], filter: elfaF, setFilter: setElfaF}
+                            ].map(({id, title, items, filter, setFilter}) => (
+                                <div key={id} className="filter-section">
+                                    <div className="filter-header" onClick={() => setOpen(open === id ? '' : id)}>
+                                        <span className="filter-title">{title}</span>
+                                        <span className={`filter-arrow ${open === id ? 'open' : ''}`}>▼</span>
+                                    </div>
+                                    <div className={`filter-content ${open === id ? 'open' : ''}`}>
+                                        <div className="filter-body">
+                                            {items.map(item => (
+                                                <div key={item} className="filter-option">
+                                                    <input type="checkbox" id={id + item} checked={filter.includes(item)} onChange={() => toggle(filter, setFilter, item)} />
+                                                    <label htmlFor={id + item}>{item.replace('DAY CARE CENTER', 'Day Care').replace('INFANT CENTER', 'Infant')}</label>
+                                                    <span className="filter-count">{data.filter(f => f[id === 'type' ? 'Facility Type' : id === 'status' ? 'Facility Status' : 'ELFA_Contracted'] === item).length}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            <div className="filter-section">
+                                <div className="filter-header" onClick={() => setOpen(open === 'cap' ? '' : 'cap')}>
+                                    <span className="filter-title">Capacity</span>
+                                    <span className={`filter-arrow ${open === 'cap' ? 'open' : ''}`}>▼</span>
+                                </div>
+                                <div className={`filter-content ${open === 'cap' ? 'open' : ''}`}>
+                                    <div className="filter-body">
+                                        <div className="capacity-inputs">
+                                            <div className="capacity-input"><label>Min</label><input type="number" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="0" /></div>
+                                            <div className="capacity-input"><label>Max</label><input type="number" value={maxCap} onChange={e => setMaxCap(e.target.value)} placeholder="580" /></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div className="filter-section">
+                                <div className="filter-header" onClick={() => setOpen(open === 'special' ? '' : 'special')}>
+                                    <span className="filter-title">Special</span>
+                                    <span className={`filter-arrow ${open === 'special' ? 'open' : ''}`}>▼</span>
+                                </div>
+                                <div className={`filter-content ${open === 'special' ? 'open' : ''}`}>
+                                    <div className="filter-body">
+                                        <div className="filter-option">
+                                            <input type="checkbox" id="sfusd" checked={sfusdOnly} onChange={e => setSfusdOnly(e.target.checked)} />
+                                            <label htmlFor="sfusd">SFUSD Only</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="card">
+                            <div className="map-header">
+                                <div className="map-title">Geographic Distribution</div>
+                                <div className="map-controls">
+                                    <button className={`btn ${heatmap ? 'active' : ''}`} onClick={() => setHeatmap(!heatmap)}>🔥 Heatmap</button>
+                                    <button className={`btn ${markers ? 'active' : ''}`} onClick={() => setMarkers(!markers)}>📍 Markers</button>
+                                    <button className="btn" onClick={() => mapInst.current?.setView([37.7749, -122.4194], 12)}>🎯 Reset</button>
+                                </div>
+                            </div>
+                            <div id="map" ref={mapRef}></div>
+                            <div className="map-note">⚠️ Locations approximate (zip-based). See list for exact addresses.</div>
+                        </div>
+                        
+                        <div>
+                            <div className="card stats-card sidebar">
+                                <h3>Quick Stats</h3>
+                                {[
+                                    {label: 'Total Facilities', val: stats.total, w: '100%'},
+                                    {label: 'Total Capacity', val: stats.cap.toLocaleString(), w: '85%'},
+                                    {label: 'Licensed', val: stats.licPct + '%', w: stats.licPct + '%'},
+                                    {label: 'SFUSD Sites', val: stats.sfu, w: '30%'}
+                                ].map((s, i) => (
+                                    <div key={i} className="stat-item">
+                                        <div className="stat-item-label">{s.label}</div>
+                                        <div className="stat-row">
+                                            <div className="stat-num">{s.val}</div>
+                                            <div className="progress-bar"><div className="progress-fill" style={{width: s.w}}></div></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div className="card stats-card">
+                                <h3>Capacity Distribution</h3>
+                                <div className="chart-container"><canvas ref={chartRef}></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="card" style={{padding: '20px'}}>
+                        <div className="facilities-header">
+                            <h2>Facilities</h2>
+                            <div>Showing {(page-1)*perPage+1}-{Math.min(page*perPage, filtered.length)} of {filtered.length}</div>
+                        </div>
+                        
+                        {paged.map((f, i) => (
+                            <div key={i} className="facility-card">
+                                <div className="facility-header">
+                                    <div className="facility-name">{f['Facility Name']}</div>
+                                    <div className="badges">
+                                        <span className={`badge ${f['Facility Status'] === 'LICENSED' ? 'badge-licensed' : 'badge-closed'}`}>{f['Facility Status']}</span>
+                                        {f['ELFA_Contracted'] === 'Yes' && <span className="badge badge-elfa">ELFA</span>}
+                                        {f['SFUSD_Site'] === 'Yes' && <span className="badge badge-sfusd">SFUSD</span>}
+                                    </div>
+                                </div>
+                                <div className="facility-details">
+                                    {f['Facility Address']}, {f['Facility City']} {f['Facility Zip']}
+                                    {f['SFUSD_Site'] === 'Yes' && f['SFUSD_School_Name'] && <div style={{color: '#673AB7', marginTop: '4px'}}>🏫 {f['SFUSD_School_Name']}</div>}
+                                </div>
+                                <div className="facility-capacity">Capacity: {f['Facility Capacity'] || 'N/A'}</div>
+                            </div>
+                        ))}
+                        
+                        {totalPages > 1 && (
+                            <div className="pagination">
+                                <button className="page-btn" onClick={() => setPage(p => Math.max(1, p-1))} disabled={page === 1}>← Prev</button>
+                                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                                    let p = totalPages <= 5 ? i + 1 : page <= 3 ? i + 1 : page >= totalPages - 2 ? totalPages - 4 + i : page - 2 + i;
+                                    return <button key={i} className={`page-btn ${page === p ? 'active' : ''}`} onClick={() => setPage(p)}>{p}</button>;
+                                })}
+                                <button className="page-btn" onClick={() => setPage(p => Math.min(totalPages, p+1))} disabled={page === totalPages}>Next →</button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                
+                {modal && (
+                    <div className="modal-overlay" onClick={() => setModal(false)}>
+                        <div className="modal" onClick={e => e.stopPropagation()}>
+                            <div className="modal-header">
+                                <h2>About</h2>
+                                <button className="modal-close" onClick={() => setModal(false)}>×</button>
+                            </div>
+                            <div className="modal-section">
+                                <h3>⚠️ Data Limitation</h3>
+                                <p>This dashboard includes licensed child care <strong>centers and large Family Child Care (FCC)</strong> facilities from CCLD data. <strong>Small FCCs are not included</strong> as they must be deduced from combining SFDEC and CCLD large FCC data using license numbers.</p>
+                                <p><strong>Coverage:</strong><br/>✓ Day Care Centers<br/>✓ Large FCCs<br/>✗ Small FCCs (requires cross-reference)</p>
+                            </div>
+                            <div className="modal-section">
+                                <h3>📊 Data Sources</h3>
+                                <ul>
+                                    <li><a href="https://sfdec.org/early-learning-for-all/early-learning-programs/" target="_blank">ELFA - SF Dept Early Childhood</a></li>
+                                    <li><a href="https://www.ccld.dss.ca.gov/carefacilitysearch/DownloadData" target="_blank">CCLD - CA Licensing</a></li>
+                                    <li><a href="https://www.sfusd.edu/schools/directory/table?field_school_type_target_id%5B317%5D=317" target="_blank">SFUSD Directory</a></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>;
+        };
+        
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
